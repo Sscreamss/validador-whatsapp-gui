@@ -119,6 +119,7 @@
     "rimraf": "^5.0.0"
   },
   "dependencies": {
+    "electron-updater": "^6.8.3",
     "googleapis": "^128.0.0",
     "puppeteer": "^21.0.0",
     "qrcode-terminal": "^0.12.0",

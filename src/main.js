@@ -5,6 +5,9 @@ const fs = require('fs');
 // Importar tu lógica de validación
 const ValidadorCore = require('./core/validator');
 
+// ✅ IMPORTAR AUTO-UPDATER
+const { setupAutoUpdater } = require('./autoUpdater');
+
 let mainWindow;
 let validadorInstance = null;
 
@@ -118,6 +121,10 @@ function validateConfigData(configData) {
   }
 }
 
+function openUserDataFolder() {
+  shell.openPath(userDataPath);
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -137,102 +144,80 @@ function createWindow() {
   // Cargar la aplicación
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
-  // Mostrar ventana cuando esté lista
+  // ✅ Al mostrar la ventana, lo PRIMERO es verificar actualizaciones
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
-    
-    // Verificar credenciales al cargar
+
+    // ✅ PASO 1: Inicializar auto-updater (solo en producción)
+    if (!isDev) {
+      setupAutoUpdater(mainWindow, (logEntry) => {
+        console.log(`[UpdateLog] ${logEntry.message}`);
+      });
+    } else {
+      console.log('[AutoUpdater] Omitido en modo desarrollo');
+      // Informar al renderer que estamos en dev para que cierre el overlay
+      mainWindow.webContents.send('updater:status', { status: 'dev' });
+    }
+
+    // ✅ PASO 2: Verificar credenciales después del updater
     if (!checkCredentialsOnce()) {
       mainWindow.webContents.send('credentials-missing', {
         path: userDataPath,
-        message: `No se encontró credenciales.json. Por favor, coloca el archivo en:\n${userDataPath}`
+        message: `No se encontró credenciales.json. Por favor colócalo en: ${userDataPath}`
       });
     }
   });
-
-  // DevTools en desarrollo
-  if (isDev) {
-    mainWindow.webContents.openDevTools();
-  }
-
-  return mainWindow;
-}
-
-function openUserDataFolder() {
-  shell.openPath(userDataPath);
 }
 
 function createMenu() {
   const isMac = process.platform === 'darwin';
-  
+
   const template = [
-    // macOS app menu
+    // App menu (solo macOS)
     ...(isMac ? [{
-      label: app.getName(),
+      label: app.name,
       submenu: [
-        { label: 'Acerca de ' + app.getName(), role: 'about' },
+        { label: 'Acerca de', role: 'about' },
         { type: 'separator' },
         { label: 'Servicios', role: 'services' },
         { type: 'separator' },
-        { label: 'Ocultar ' + app.getName(), accelerator: 'Command+H', role: 'hide' },
-        { label: 'Ocultar Otros', accelerator: 'Command+Shift+H', role: 'hideothers' },
+        { label: `Ocultar ${app.name}`, accelerator: 'Command+H', role: 'hide' },
+        { label: 'Ocultar Otros', accelerator: 'Command+Alt+H', role: 'hideOthers' },
         { label: 'Mostrar Todo', role: 'unhide' },
         { type: 'separator' },
         { label: 'Salir', accelerator: 'Command+Q', role: 'quit' }
       ]
     }] : []),
-    
+
     // File menu
     {
       label: 'Archivo',
       submenu: [
-        { 
-          label: 'Abrir Configuración...', 
-          accelerator: isMac ? 'Command+O' : 'Ctrl+O',
-          click: abrirConfiguracion
+        {
+          label: 'Abrir Carpeta de Datos',
+          click: openUserDataFolder
         },
         { type: 'separator' },
-        { 
-          label: 'Abrir Carpeta de Datos', 
-          accelerator: isMac ? 'Command+Shift+O' : 'Ctrl+Shift+O',
-          click: openUserDataFolder 
-        },
-        { type: 'separator' },
-        isMac ? { label: 'Cerrar Ventana', accelerator: 'Command+W', role: 'close' }
-              : { label: 'Salir', accelerator: 'Ctrl+Q', role: 'quit' }
+        isMac
+          ? { label: 'Cerrar', accelerator: 'Command+W', role: 'close' }
+          : { label: 'Salir', accelerator: 'Ctrl+Q', role: 'quit' }
       ]
     },
-    
-    // Edit menu
-    {
-      label: 'Editar',
-      submenu: [
-        { label: 'Deshacer', accelerator: isMac ? 'Command+Z' : 'Ctrl+Z', role: 'undo' },
-        { label: 'Rehacer', accelerator: isMac ? 'Command+Shift+Z' : 'Ctrl+Y', role: 'redo' },
-        { type: 'separator' },
-        { label: 'Cortar', accelerator: isMac ? 'Command+X' : 'Ctrl+X', role: 'cut' },
-        { label: 'Copiar', accelerator: isMac ? 'Command+C' : 'Ctrl+C', role: 'copy' },
-        { label: 'Pegar', accelerator: isMac ? 'Command+V' : 'Ctrl+V', role: 'paste' },
-        { label: 'Seleccionar Todo', accelerator: isMac ? 'Command+A' : 'Ctrl+A', role: 'selectall' }
-      ]
-    },
-    
+
     // View menu
     {
       label: 'Ver',
       submenu: [
         { label: 'Recargar', accelerator: isMac ? 'Command+R' : 'Ctrl+R', role: 'reload' },
         { label: 'Forzar Recarga', accelerator: isMac ? 'Command+Shift+R' : 'Ctrl+Shift+R', role: 'forceReload' },
-        { label: 'Herramientas de Desarrollador', accelerator: isMac ? 'F12' : 'F12', role: 'toggleDevTools' },
         { type: 'separator' },
-        { label: 'Tamaño Real', accelerator: isMac ? 'Command+0' : 'Ctrl+0', role: 'resetZoom' },
         { label: 'Aumentar Zoom', accelerator: isMac ? 'Command+Plus' : 'Ctrl+Plus', role: 'zoomIn' },
         { label: 'Reducir Zoom', accelerator: isMac ? 'Command+-' : 'Ctrl+-', role: 'zoomOut' },
         { type: 'separator' },
         { label: 'Pantalla Completa', accelerator: isMac ? 'Control+Command+F' : 'F11', role: 'togglefullscreen' }
       ]
     },
-    
+
     // Window menu
     {
       label: 'Ventana',
@@ -267,7 +252,10 @@ async function abrirConfiguracion() {
   }
 }
 
-// Event listeners de la app
+// ─────────────────────────────────────────────
+// APP LIFECYCLE
+// ─────────────────────────────────────────────
+
 app.whenReady().then(() => {
   ensureUserDataFolders();
   createWindow();
@@ -286,7 +274,17 @@ app.on('activate', () => {
   }
 });
 
-// IPC Handlers - Comunicación con el renderer
+// Manejar cierre de la aplicación
+app.on('before-quit', async () => {
+  if (validadorInstance) {
+    await validadorInstance.cleanup();
+  }
+});
+
+// ─────────────────────────────────────────────
+// IPC HANDLERS
+// ─────────────────────────────────────────────
+
 ipcMain.handle('get-configs', async () => {
   try {
     ensureUserDataFolders();
@@ -332,6 +330,10 @@ ipcMain.handle('open-data-folder', async () => {
   return { success: true };
 });
 
+ipcMain.handle('get-user-data-path', () => {
+  return userDataPath;
+});
+
 /**
  * Handler para guardar una nueva configuración
  */
@@ -360,7 +362,6 @@ ipcMain.handle('save-new-config', async (event, fileName, configData) => {
     // Guardar archivo JSON con formato bonito
     fs.writeFileSync(configFilePath, JSON.stringify(configData, null, 2), 'utf8');
     
-    // Log del éxito
     console.log(`Nueva configuración guardada: ${configFilePath}`);
     
     return {
@@ -504,18 +505,10 @@ ipcMain.handle('get-validation-status', () => {
   return { status: 'inactive' };
 });
 
-ipcMain.handle('get-user-data-path', () => {
-  return userDataPath;
-});
+// ─────────────────────────────────────────────
+// MANEJO DE ERRORES GLOBALES
+// ─────────────────────────────────────────────
 
-// Manejar cierre de la aplicación
-app.on('before-quit', async () => {
-  if (validadorInstance) {
-    await validadorInstance.cleanup();
-  }
-});
-
-// Manejar errores no capturados
 process.on('uncaughtException', (error) => {
   console.error('Error no capturado:', error);
 });
