@@ -1,9 +1,12 @@
 // autoUpdater.js - Sistema de actualización automática via GitHub Releases
 const { autoUpdater } = require("electron-updater");
-const { ipcMain } = require("electron");
+const { ipcMain, shell, app } = require("electron");
+const path = require("path");
+const fs = require("fs");
 
 let mainWindow = null;
 let updateLog = null;
+let downloadedDmgPath = null; // Guardamos la ruta del DMG descargado
 
 function log(message) {
   console.log(`[AutoUpdater] ${message}`);
@@ -20,7 +23,7 @@ function setupAutoUpdater(win, onLog) {
 
   // Configuración
   autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.autoInstallOnAppQuit = false; // Lo manejamos nosotros
   autoUpdater.allowDowngrade = false;
 
   // ═══════════════════════════════════════
@@ -62,14 +65,30 @@ function setupAutoUpdater(win, onLog) {
   });
 
   autoUpdater.on("update-downloaded", (info) => {
-    log(`📦 Actualización descargada: v${info.version}. Lista para instalar.`);
+    log(`📦 Actualización descargada: v${info.version}. Buscando DMG...`);
+
+    // Buscar el DMG descargado en la carpeta cache del updater
+    downloadedDmgPath = findDownloadedDmg(info.version);
+
+    if (downloadedDmgPath) {
+      log(`📦 DMG encontrado: ${downloadedDmgPath}`);
+    } else {
+      log(`⚠️ No se encontró el DMG, se abrirá la página de releases`);
+    }
+
     sendToRenderer("updater:status", {
       status: "downloaded",
-      version: info.version
+      version: info.version,
+      dmgFound: !!downloadedDmgPath
     });
   });
 
   autoUpdater.on("error", (error) => {
+    // Ignorar el error de code signature — la descarga ya fue exitosa
+    if (error.message.includes("Could not get code signature")) {
+      log(`⚠️ Sin firma de código (normal en apps no certificadas), continuando...`);
+      return; // No enviar error al renderer, update-downloaded ya se disparó
+    }
     log(`❌ Error en actualización: ${error.message}`);
     sendToRenderer("updater:status", {
       status: "error",
@@ -102,12 +121,25 @@ function setupAutoUpdater(win, onLog) {
   });
 
   ipcMain.handle("updater:install", () => {
-    log("🔄 Instalando actualización y reiniciando...");
-    autoUpdater.quitAndInstall(false, true);
+    log("🔄 Iniciando instalación...");
+
+    if (downloadedDmgPath && fs.existsSync(downloadedDmgPath)) {
+      // ✅ Abrir el DMG directamente — el usuario arrastra la app a /Applications
+      log(`📂 Abriendo DMG: ${downloadedDmgPath}`);
+      shell.openPath(downloadedDmgPath);
+    } else {
+      // Fallback: abrir la página de releases en GitHub
+      log(`🌐 Abriendo página de releases en GitHub`);
+      shell.openExternal("https://github.com/Sscreamss/validador-whatsapp-gui/releases/latest");
+    }
+
+    // Cerrar la app después de un momento para que el usuario pueda instalar
+    setTimeout(() => {
+      app.quit();
+    }, 1500);
   });
 
   ipcMain.handle("updater:get-version", () => {
-    const { app } = require("electron");
     return app.getVersion();
   });
 
@@ -128,6 +160,31 @@ function setupAutoUpdater(win, onLog) {
       log(`⚠️ No se pudo verificar actualizaciones: ${err.message}`);
     });
   }, TWENTY_FOUR_HOURS);
+}
+
+// ═══════════════════════════════════════
+// BUSCAR DMG DESCARGADO EN CACHE
+// ═══════════════════════════════════════
+function findDownloadedDmg(version) {
+  try {
+    const cacheDir = path.join(app.getPath("cache"), "validador-whatsapp-gui-updater", "pending");
+    if (!fs.existsSync(cacheDir)) return null;
+
+    const files = fs.readdirSync(cacheDir);
+
+    // Primero buscar el arm64 (Apple Silicon es lo más común)
+    const arm64 = files.find(f => f.includes(version) && f.includes("arm64") && f.endsWith(".dmg"));
+    if (arm64) return path.join(cacheDir, arm64);
+
+    // Si no, buscar cualquier DMG de esa versión
+    const anyDmg = files.find(f => f.includes(version) && f.endsWith(".dmg"));
+    if (anyDmg) return path.join(cacheDir, anyDmg);
+
+    return null;
+  } catch (err) {
+    log(`⚠️ Error buscando DMG en cache: ${err.message}`);
+    return null;
+  }
 }
 
 function sendToRenderer(channel, data) {
