@@ -1,6 +1,6 @@
 {
   "name": "validador-whatsapp-gui",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Validador de WhatsApp con interfaz gráfica",
   "main": "src/main.js",
   "author": "Validador WhatsApp",
@@ -8,6 +8,10 @@
     "start": "electron .",
     "dev": "cross-env NODE_ENV=development electron . --dev",
     "dev:win": "electron . --dev",
+    "release": "electron-builder --mac --publish always",
+    "release:mac": "electron-builder --mac --publish always",
+    "release:win": "electron-builder --win --publish always",
+    "release:all": "electron-builder --mac --win --publish always",
     "build": "npm run build:mac:intel && npm run build:mac:apple",
     "build:mac": "npm run build:mac:intel && npm run build:mac:apple",
     "build:mac:intel": "electron-builder --mac --x64",
@@ -107,7 +111,7 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "Martinkroh97",
+      "owner": "Sscreamss",
       "repo": "validador-whatsapp-gui"
     }
   },
@@ -119,7 +123,7 @@
     "rimraf": "^5.0.0"
   },
   "dependencies": {
-    "electron-updater": "^6.8.3",
+    "electron-updater": "^6.1.7",
     "googleapis": "^128.0.0",
     "puppeteer": "^21.0.0",
     "qrcode-terminal": "^0.12.0",

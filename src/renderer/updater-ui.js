@@ -13,15 +13,15 @@
       <div id="updaterOverlay" class="updater-overlay hidden">
         <div class="updater-modal">
 
-          <!-- Checking -->
-          <div class="updater-state" id="updaterChecking">
+          <!-- Checking: arranca con clase "active" directamente -->
+          <div class="updater-state active" id="updaterChecking">
             <div class="updater-spinner"></div>
             <h2>Verificando actualizaciones...</h2>
             <p>Conectando con GitHub Releases</p>
           </div>
 
           <!-- Up to date -->
-          <div class="updater-state hidden" id="updaterUpToDate">
+          <div class="updater-state" id="updaterUpToDate">
             <div class="updater-icon updater-icon--success">✓</div>
             <h2>¡Estás al día!</h2>
             <p id="upToDateVersion"></p>
@@ -30,8 +30,8 @@
             </button>
           </div>
 
-          <!-- Update available -->
-          <div class="updater-state hidden" id="updaterAvailable">
+          <!-- Update available + descargando -->
+          <div class="updater-state" id="updaterAvailable">
             <div class="updater-icon updater-icon--info">↓</div>
             <h2>Nueva versión disponible</h2>
             <p id="availableVersionText"></p>
@@ -43,7 +43,7 @@
           </div>
 
           <!-- Downloaded - ready to install -->
-          <div class="updater-state hidden" id="updaterDownloaded">
+          <div class="updater-state" id="updaterDownloaded">
             <div class="updater-icon updater-icon--success">📦</div>
             <h2>Actualización lista</h2>
             <p id="downloadedVersionText"></p>
@@ -58,8 +58,8 @@
             </div>
           </div>
 
-          <!-- Error -->
-          <div class="updater-state hidden" id="updaterError">
+          <!-- Error / Sin conexión -->
+          <div class="updater-state" id="updaterError">
             <div class="updater-icon updater-icon--warn">⚠️</div>
             <h2>Sin conexión</h2>
             <p>No se pudo verificar actualizaciones.</p>
@@ -69,7 +69,7 @@
           </div>
 
           <!-- Dev mode -->
-          <div class="updater-state hidden" id="updaterDev">
+          <div class="updater-state" id="updaterDev">
             <div class="updater-icon updater-icon--warn">🛠</div>
             <h2>Modo desarrollo</h2>
             <p>Las actualizaciones automáticas están desactivadas.</p>
@@ -125,7 +125,9 @@
         to   { opacity: 1; transform: translateY(0); }
       }
 
+      /* Todos los estados ocultos por defecto */
       .updater-state { display: none; }
+      /* Solo el que tiene .active se muestra */
       .updater-state.active { display: block; }
 
       .updater-spinner {
@@ -151,7 +153,6 @@
         justify-content: center;
         font-size: 28px;
         margin: 0 auto 20px;
-        font-style: normal;
       }
 
       .updater-icon--success { background: rgba(52, 199, 89, 0.15); }
@@ -254,10 +255,14 @@
 
   function hideOverlay() {
     const overlay = document.getElementById('updaterOverlay');
-    if (overlay) {
-      overlay.style.animation = 'updaterFadeIn 0.2s ease reverse';
-      setTimeout(() => overlay.classList.add('hidden'), 180);
-    }
+    if (!overlay || overlay.classList.contains('hidden')) return;
+    overlay.style.opacity = '0';
+    overlay.style.transition = 'opacity 0.2s ease';
+    setTimeout(() => {
+      overlay.classList.add('hidden');
+      overlay.style.opacity = '';
+      overlay.style.transition = '';
+    }, 200);
   }
 
   function initUpdaterUI() {
@@ -271,38 +276,48 @@
     wrapper.innerHTML = createOverlayHTML();
     document.body.prepend(wrapper.firstElementChild);
 
-    // Mostrar overlay inmediatamente en estado "checking"
+    // Mostrar overlay — el estado "checking" ya tiene clase "active" en el HTML
     showOverlay();
-    showState('updaterChecking');
+
+    // ── Timeout de seguridad: si en 15s no llega ningún evento, cerrar igual ──
+    const safetyTimeout = setTimeout(() => {
+      console.warn('[UpdaterUI] Timeout de seguridad — cerrando overlay');
+      hideOverlay();
+    }, 15000);
+
+    function resolveUpdater() {
+      clearTimeout(safetyTimeout);
+    }
 
     // ── Botones ──
-    document.getElementById('updaterContinueBtn')?.addEventListener('click', hideOverlay);
-    document.getElementById('updaterOfflineBtn')?.addEventListener('click', hideOverlay);
-    document.getElementById('updaterDevBtn')?.addEventListener('click', hideOverlay);
-    document.getElementById('updaterLaterBtn')?.addEventListener('click', hideOverlay);
+    document.getElementById('updaterContinueBtn')?.addEventListener('click', () => { resolveUpdater(); hideOverlay(); });
+    document.getElementById('updaterOfflineBtn')?.addEventListener('click', () => { resolveUpdater(); hideOverlay(); });
+    document.getElementById('updaterDevBtn')?.addEventListener('click', () => { resolveUpdater(); hideOverlay(); });
+    document.getElementById('updaterLaterBtn')?.addEventListener('click', () => { resolveUpdater(); hideOverlay(); });
 
     document.getElementById('updaterInstallBtn')?.addEventListener('click', () => {
-      if (window.updaterAPI) {
-        window.updaterAPI.install();
-      }
+      resolveUpdater();
+      window.updaterAPI?.install();
     });
 
     // ── Escuchar estados del main process ──
     if (window.updaterAPI) {
       window.updaterAPI.onStatus((data) => {
-        console.log('[UpdaterUI] Estado recibido:', data);
+        console.log('[UpdaterUI] Estado recibido:', data.status);
 
         switch (data.status) {
+
           case 'checking':
             showState('updaterChecking');
             break;
 
           case 'up-to-date':
+            resolveUpdater();
             showState('updaterUpToDate');
             const versionEl = document.getElementById('upToDateVersion');
             if (versionEl) versionEl.textContent = `Versión actual: v${data.version}`;
-            // Auto-cerrar después de 2 segundos
-            setTimeout(hideOverlay, 2000);
+            // Auto-cerrar después de 1.5s, con botón por si acaso
+            setTimeout(hideOverlay, 1500);
             break;
 
           case 'available':
@@ -312,6 +327,7 @@
             break;
 
           case 'downloaded':
+            resolveUpdater();
             showState('updaterDownloaded');
             const dlEl = document.getElementById('downloadedVersionText');
             if (dlEl) dlEl.textContent = `v${data.version} lista para instalar`;
@@ -319,15 +335,18 @@
 
           case 'error':
           case 'offline':
+            resolveUpdater();
             showState('updaterError');
             break;
 
           case 'dev':
+            resolveUpdater();
             showState('updaterDev');
-            setTimeout(hideOverlay, 1500);
+            setTimeout(hideOverlay, 1000);
             break;
 
           default:
+            resolveUpdater();
             hideOverlay();
         }
       });
@@ -342,10 +361,12 @@
           text.textContent = `${data.percent}% — ${mb} MB / ${total} MB`;
         }
       });
+
     } else {
-      // updaterAPI no disponible (modo dev sin preload correcto)
+      // updaterAPI no disponible
       console.warn('[UpdaterUI] updaterAPI no disponible, cerrando overlay.');
-      setTimeout(hideOverlay, 1000);
+      resolveUpdater();
+      setTimeout(hideOverlay, 800);
     }
   }
 
