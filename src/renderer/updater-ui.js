@@ -1,9 +1,15 @@
 // updater-ui.js
 // Maneja toda la UI del auto-updater en el renderer.
-// Se inicializa al arrancar la app, antes que cualquier otra pantalla.
+// Se inicializa UNA SOLA VEZ al arrancar la app.
 
 (function () {
   'use strict';
+
+  // ═══════════════════════════════════════════════════════════
+  // FLAG GLOBAL: evita que se re-inicialice al minimizar/maximizar
+  // ═══════════════════════════════════════════════════════════
+  let updaterAlreadyInitialized = false;
+  let updaterCompleted = false; // true cuando ya pasó el check (up-to-date, error, dev, etc.)
 
   // ─────────────────────────────────────────
   // OVERLAY HTML (se inyecta dinámicamente)
@@ -13,7 +19,7 @@
       <div id="updaterOverlay" class="updater-overlay hidden">
         <div class="updater-modal">
 
-          <!-- Checking: arranca con clase "active" directamente -->
+          <!-- Checking -->
           <div class="updater-state active" id="updaterChecking">
             <div class="updater-spinner"></div>
             <h2>Verificando actualizaciones...</h2>
@@ -47,13 +53,13 @@
             <div class="updater-icon updater-icon--success">📦</div>
             <h2>Actualización lista</h2>
             <p id="downloadedVersionText"></p>
-            <p class="updater-subtitle">La actualización se instalará al reiniciar.</p>
+            <p class="updater-subtitle">Se descargó el instalador. Hacé clic para abrir e instalar.</p>
             <div class="updater-actions">
               <button class="updater-btn updater-btn--primary" id="updaterInstallBtn">
-                Instalar y reiniciar ahora
+                Instalar ahora
               </button>
               <button class="updater-btn updater-btn--secondary" id="updaterLaterBtn">
-                Instalar al cerrar
+                Más tarde
               </button>
             </div>
           </div>
@@ -84,7 +90,7 @@
   }
 
   // ─────────────────────────────────────────
-  // ESTILOS CSS (se inyectan dinámicamente)
+  // ESTILOS CSS
   // ─────────────────────────────────────────
   function createStyles() {
     return `
@@ -125,9 +131,7 @@
         to   { opacity: 1; transform: translateY(0); }
       }
 
-      /* Todos los estados ocultos por defecto */
       .updater-state { display: none; }
-      /* Solo el que tiene .active se muestra */
       .updater-state.active { display: block; }
 
       .updater-spinner {
@@ -266,6 +270,15 @@
   }
 
   function initUpdaterUI() {
+    // ══════════════════════════════════════════════════
+    // GUARD: No re-inicializar si ya se hizo
+    // ══════════════════════════════════════════════════
+    if (updaterAlreadyInitialized) {
+      console.log('[UpdaterUI] Ya inicializado, ignorando re-init.');
+      return;
+    }
+    updaterAlreadyInitialized = true;
+
     // Inyectar estilos
     const style = document.createElement('style');
     style.textContent = createStyles();
@@ -276,17 +289,19 @@
     wrapper.innerHTML = createOverlayHTML();
     document.body.prepend(wrapper.firstElementChild);
 
-    // Mostrar overlay — el estado "checking" ya tiene clase "active" en el HTML
+    // Mostrar overlay — el estado "checking" ya tiene clase "active"
     showOverlay();
 
-    // ── Timeout de seguridad: si en 15s no llega ningún evento, cerrar igual ──
+    // ── Timeout de seguridad: si en 15s no llega ningún evento, cerrar ──
     const safetyTimeout = setTimeout(() => {
       console.warn('[UpdaterUI] Timeout de seguridad — cerrando overlay');
+      updaterCompleted = true;
       hideOverlay();
     }, 15000);
 
     function resolveUpdater() {
       clearTimeout(safetyTimeout);
+      updaterCompleted = true;
     }
 
     // ── Botones ──
@@ -297,6 +312,7 @@
 
     document.getElementById('updaterInstallBtn')?.addEventListener('click', () => {
       resolveUpdater();
+      // Llamar al main process para que abra el DMG/ZIP
       window.updaterAPI?.install();
     });
 
@@ -305,10 +321,18 @@
       window.updaterAPI.onStatus((data) => {
         console.log('[UpdaterUI] Estado recibido:', data.status);
 
+        // Si el updater ya completó su ciclo inicial, ignorar eventos
+        // que re-dispararían el overlay (como "checking" de los intervals de 24h)
+        if (updaterCompleted && data.status === 'checking') {
+          console.log('[UpdaterUI] Check periódico ignorado (ya completó ciclo inicial).');
+          return;
+        }
+
         switch (data.status) {
 
           case 'checking':
             showState('updaterChecking');
+            showOverlay();
             break;
 
           case 'up-to-date':
@@ -316,12 +340,12 @@
             showState('updaterUpToDate');
             const versionEl = document.getElementById('upToDateVersion');
             if (versionEl) versionEl.textContent = `Versión actual: v${data.version}`;
-            // Auto-cerrar después de 1.5s, con botón por si acaso
             setTimeout(hideOverlay, 1500);
             break;
 
           case 'available':
             showState('updaterAvailable');
+            showOverlay();
             const availEl = document.getElementById('availableVersionText');
             if (availEl) availEl.textContent = `v${data.version} disponible — descargando...`;
             break;
@@ -329,6 +353,7 @@
           case 'downloaded':
             resolveUpdater();
             showState('updaterDownloaded');
+            showOverlay();
             const dlEl = document.getElementById('downloadedVersionText');
             if (dlEl) dlEl.textContent = `v${data.version} lista para instalar`;
             break;
@@ -370,7 +395,7 @@
     }
   }
 
-  // Inicializar cuando el DOM esté listo
+  // Inicializar cuando el DOM esté listo (una sola vez)
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initUpdaterUI);
   } else {

@@ -6,7 +6,8 @@ const fs = require("fs");
 
 let mainWindow = null;
 let updateLog = null;
-let downloadedDmgPath = null; // Guardamos la ruta del DMG descargado
+let downloadedFilePath = null; // Ruta del archivo descargado (DMG o ZIP)
+let updateAlreadyChecked = false; // ← FLAG: evita múltiples checks al minimizar/maximizar
 
 function log(message) {
   console.log(`[AutoUpdater] ${message}`);
@@ -21,9 +22,18 @@ function setupAutoUpdater(win, onLog) {
   mainWindow = win;
   updateLog = onLog;
 
+  // ══════════════════════════════════════════════════════════
+  // GUARD: Si ya se configuró el updater, no volver a hacerlo
+  // ══════════════════════════════════════════════════════════
+  if (updateAlreadyChecked) {
+    log("⏭️ Auto-updater ya fue inicializado, saltando...");
+    return;
+  }
+  updateAlreadyChecked = true;
+
   // Configuración
   autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = false; // Lo manejamos nosotros
+  autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.allowDowngrade = false;
 
   // ═══════════════════════════════════════
@@ -65,21 +75,21 @@ function setupAutoUpdater(win, onLog) {
   });
 
   autoUpdater.on("update-downloaded", (info) => {
-    log(`📦 Actualización descargada: v${info.version}. Buscando DMG...`);
+    log(`📦 Actualización descargada: v${info.version}. Buscando archivo instalable...`);
 
-    // Buscar el DMG descargado en la carpeta cache del updater
-    downloadedDmgPath = findDownloadedDmg(info.version);
+    // Buscar el archivo descargado (DMG o ZIP) en todas las rutas posibles
+    downloadedFilePath = findDownloadedInstaller(info.version);
 
-    if (downloadedDmgPath) {
-      log(`📦 DMG encontrado: ${downloadedDmgPath}`);
+    if (downloadedFilePath) {
+      log(`📦 Archivo encontrado: ${downloadedFilePath}`);
     } else {
-      log(`⚠️ No se encontró el DMG, se abrirá la página de releases`);
+      log(`⚠️ No se encontró archivo instalable en cache`);
     }
 
     sendToRenderer("updater:status", {
       status: "downloaded",
       version: info.version,
-      dmgFound: !!downloadedDmgPath
+      installerFound: !!downloadedFilePath
     });
   });
 
@@ -87,7 +97,7 @@ function setupAutoUpdater(win, onLog) {
     // Ignorar el error de code signature — la descarga ya fue exitosa
     if (error.message.includes("Could not get code signature")) {
       log(`⚠️ Sin firma de código (normal en apps no certificadas), continuando...`);
-      return; // No enviar error al renderer, update-downloaded ya se disparó
+      return;
     }
     log(`❌ Error en actualización: ${error.message}`);
     sendToRenderer("updater:status", {
@@ -123,20 +133,32 @@ function setupAutoUpdater(win, onLog) {
   ipcMain.handle("updater:install", () => {
     log("🔄 Iniciando instalación...");
 
-    if (downloadedDmgPath && fs.existsSync(downloadedDmgPath)) {
-      // ✅ Abrir el DMG directamente — el usuario arrastra la app a /Applications
-      log(`📂 Abriendo DMG: ${downloadedDmgPath}`);
-      shell.openPath(downloadedDmgPath);
-    } else {
-      // Fallback: abrir la página de releases en GitHub
-      log(`🌐 Abriendo página de releases en GitHub`);
-      shell.openExternal("https://github.com/Sscreamss/validador-whatsapp-gui/releases/latest");
-    }
+    if (downloadedFilePath && fs.existsSync(downloadedFilePath)) {
+      // ✅ Abrir el archivo descargado directamente
+      // Si es un DMG → el usuario arrastra la app a /Applications
+      // Si es un ZIP → macOS lo descomprime automáticamente
+      log(`📂 Abriendo archivo: ${downloadedFilePath}`);
+      shell.openPath(downloadedFilePath);
 
-    // Cerrar la app después de un momento para que el usuario pueda instalar
-    setTimeout(() => {
-      app.quit();
-    }, 1500);
+      // Cerrar la app después de un momento para que el usuario pueda instalar
+      setTimeout(() => {
+        app.quit();
+      }, 2000);
+    } else {
+      // ═══════════════════════════════════════════════════════════
+      // FALLBACK: Intentar quitAndInstall de electron-updater
+      // ═══════════════════════════════════════════════════════════
+      log(`🔄 Intentando quitAndInstall()...`);
+      try {
+        autoUpdater.quitAndInstall(false, true);
+      } catch (err) {
+        log(`⚠️ quitAndInstall falló: ${err.message}. Abriendo releases...`);
+        shell.openExternal("https://github.com/Sscreamss/validador-whatsapp-gui/releases/latest");
+        setTimeout(() => {
+          app.quit();
+        }, 1500);
+      }
+    }
   });
 
   ipcMain.handle("updater:get-version", () => {
@@ -144,7 +166,7 @@ function setupAutoUpdater(win, onLog) {
   });
 
   // ═══════════════════════════════════════
-  // CHECK INMEDIATO al arrancar
+  // CHECK INICIAL (una sola vez)
   // ═══════════════════════════════════════
   log("🚀 Verificando actualizaciones al iniciar...");
   autoUpdater.checkForUpdates().catch((err) => {
@@ -162,29 +184,80 @@ function setupAutoUpdater(win, onLog) {
   }, TWENTY_FOUR_HOURS);
 }
 
-// ═══════════════════════════════════════
-// BUSCAR DMG DESCARGADO EN CACHE
-// ═══════════════════════════════════════
-function findDownloadedDmg(version) {
-  try {
-    const cacheDir = path.join(app.getPath("cache"), "validador-whatsapp-gui-updater", "pending");
-    if (!fs.existsSync(cacheDir)) return null;
+// ═══════════════════════════════════════════════════════════
+// BUSCAR ARCHIVO DESCARGADO (DMG, ZIP) EN TODAS LAS RUTAS
+// ═══════════════════════════════════════════════════════════
+function findDownloadedInstaller(version) {
+  const appName = app.getName() || "validador-whatsapp-gui";
 
-    const files = fs.readdirSync(cacheDir);
+  // electron-updater guarda en distintas rutas según la versión y plataforma
+  const possibleCacheDirs = [
+    path.join(app.getPath("cache"), `${appName}-updater`, "pending"),
+    path.join(app.getPath("cache"), `${appName}-updater`),
+    path.join(app.getPath("temp"), `${appName}-updater`),
+    path.join(app.getPath("cache"), "electron-updater", "pending"),
+    path.join(app.getPath("cache"), "electron-updater"),
+    // Ruta alternativa con el productName
+    path.join(app.getPath("cache"), "Validador WhatsApp-updater", "pending"),
+    path.join(app.getPath("cache"), "Validador WhatsApp-updater"),
+  ];
 
-    // Primero buscar el arm64 (Apple Silicon es lo más común)
-    const arm64 = files.find(f => f.includes(version) && f.includes("arm64") && f.endsWith(".dmg"));
-    if (arm64) return path.join(cacheDir, arm64);
+  log(`🔎 Buscando instalador v${version} en ${possibleCacheDirs.length} directorios...`);
 
-    // Si no, buscar cualquier DMG de esa versión
-    const anyDmg = files.find(f => f.includes(version) && f.endsWith(".dmg"));
-    if (anyDmg) return path.join(cacheDir, anyDmg);
+  for (const cacheDir of possibleCacheDirs) {
+    try {
+      if (!fs.existsSync(cacheDir)) continue;
 
-    return null;
-  } catch (err) {
-    log(`⚠️ Error buscando DMG en cache: ${err.message}`);
-    return null;
+      const files = fs.readdirSync(cacheDir);
+      log(`   📁 ${cacheDir}: [${files.join(", ")}]`);
+
+      // Buscar DMG primero (preferido para macOS)
+      const dmg = files.find(f => f.endsWith(".dmg") && (f.includes(version) || files.length <= 3));
+      if (dmg) return path.join(cacheDir, dmg);
+
+      // Buscar ZIP como alternativa
+      const zip = files.find(f => f.endsWith(".zip") && (f.includes(version) || files.length <= 3));
+      if (zip) return path.join(cacheDir, zip);
+
+      // Si solo hay un archivo .dmg o .zip en la carpeta, usarlo
+      const anyInstaller = files.find(f => f.endsWith(".dmg") || f.endsWith(".zip"));
+      if (anyInstaller) return path.join(cacheDir, anyInstaller);
+
+    } catch (err) {
+      log(`   ⚠️ Error leyendo ${cacheDir}: ${err.message}`);
+    }
   }
+
+  // Último recurso: buscar recursivamente en la carpeta cache
+  try {
+    const mainCache = app.getPath("cache");
+    log(`   🔎 Búsqueda amplia en: ${mainCache}`);
+    const found = findFileRecursive(mainCache, version, 2);
+    if (found) return found;
+  } catch (err) {
+    log(`   ⚠️ Error en búsqueda amplia: ${err.message}`);
+  }
+
+  return null;
+}
+
+// Buscar archivo recursivamente (con profundidad limitada)
+function findFileRecursive(dir, version, maxDepth) {
+  if (maxDepth <= 0) return null;
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isFile() && (entry.name.endsWith(".dmg") || entry.name.endsWith(".zip")) && entry.name.includes(version)) {
+        return fullPath;
+      }
+      if (entry.isDirectory() && !entry.name.startsWith(".")) {
+        const found = findFileRecursive(fullPath, version, maxDepth - 1);
+        if (found) return found;
+      }
+    }
+  } catch {}
+  return null;
 }
 
 function sendToRenderer(channel, data) {
