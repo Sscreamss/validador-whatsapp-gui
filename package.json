@@ -1,6 +1,6 @@
 {
   "name": "validador-whatsapp-gui",
-  "version": "1.1.9",
+  "version": "1.1.10",
   "description": "Validador de WhatsApp con interfaz gráfica",
   "main": "src/main.js",
   "author": "Validador WhatsApp",
@@ -12,13 +12,13 @@
     "release:mac": "electron-builder --mac --publish always",
     "release:win": "electron-builder --win --publish always",
     "release:all": "electron-builder --mac --win --publish always",
-    "build": "pnpm build:mac:intel && pnpm build:mac:apple",
-    "build:mac": "pnpm build:mac:intel && pnpm build:mac:apple",
+    "build": "npm run build:mac:intel && npm run build:mac:apple",
+    "build:mac": "npm run build:mac:intel && npm run build:mac:apple",
     "build:mac:intel": "electron-builder --mac --x64",
     "build:mac:apple": "electron-builder --mac --arm64",
     "build:win": "electron-builder --win",
     "build:linux": "electron-builder --linux",
-    "dist": "pnpm build",
+    "dist": "npm run build",
     "postinstall": "electron-builder install-app-deps",
     "rebuild": "electron-rebuild",
     "clean": "rimraf dist node_modules/.cache"
@@ -26,14 +26,12 @@
   "build": {
     "appId": "com.validador.whatsapp",
     "productName": "Validador WhatsApp",
-    "asar": false,
     "directories": {
       "output": "dist"
     },
     "files": [
       "src/**/*",
       "node_modules/**/*",
-      "node_modules/.pnpm/**/*",
       "!node_modules/.cache/**/*",
       "!node_modules/**/test/**/*",
       "!node_modules/**/*.d.ts",

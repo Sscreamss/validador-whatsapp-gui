@@ -1,8 +1,0 @@
-allowBuilds:
-  electron: true
-  lzma-native: true
-  puppeteer: true
-onlyBuiltDependencies:
-  - electron
-  - lzma-native
-  - puppeteer
