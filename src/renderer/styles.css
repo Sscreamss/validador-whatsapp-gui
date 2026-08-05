@@ -306,6 +306,40 @@
   color: var(--text-secondary);
 }
 
+.results-summary-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, rgba(37, 211, 102, 0.1), rgba(18, 140, 126, 0.15));
+  border: 1px solid rgba(37, 211, 102, 0.3);
+  border-radius: var(--radius-medium);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+  box-shadow: var(--shadow-light);
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.results-summary-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #128C7E;
+  margin-bottom: var(--spacing-xs);
+}
+
+.results-summary-text {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.btn-copied {
+  background-color: #25D366 !important;
+  color: white !important;
+  border-color: #25D366 !important;
+  transform: scale(1.03);
+  transition: all 0.2s ease;
+}
+
 .current-processing {
   background: var(--bg-card);
   border-radius: var(--radius-medium);
@@ -514,11 +548,11 @@
 /* Toast notifications */
 .toast-container {
   position: fixed;
-  top: var(--spacing-xl);
+  bottom: var(--spacing-xl);
   right: var(--spacing-xl);
   z-index: 3000;
   display: flex;
-  flex-direction: column;
+  flex-direction: column-reverse;
   gap: var(--spacing-sm);
   pointer-events: none;
 }

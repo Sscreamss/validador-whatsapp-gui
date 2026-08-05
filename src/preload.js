@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),
 
   // Utilidades
+  copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
   showMessage: (type, message) => {
     return { type, message, timestamp: new Date().toISOString() };
   }

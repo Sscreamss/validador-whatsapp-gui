@@ -168,6 +168,15 @@
                         </div>
                     </div>
 
+                    <!-- Results Summary Card (Visible when completed) -->
+                    <div class="results-summary-card hidden" id="resultsSummaryCard">
+                        <div class="results-summary-info">
+                            <div class="results-summary-title">Validación Completada</div>
+                            <div class="results-summary-text" id="resultsSummaryText">Total: 0 | Válidos: 0 | Inválidos: 0 | Duplicados: 0</div>
+                        </div>
+                        <button class="btn btn-primary btn-copy-summary" id="copySummaryBtn">Copiar Resultado</button>
+                    </div>
+
                     <!-- Current Processing -->
                     <div class="current-processing" id="currentProcessing">
                         <h3>Procesando actualmente:</h3>
@@ -183,6 +192,7 @@
                     <div class="log-header">
                         <h3>Registro de Actividad</h3>
                         <div class="log-controls">
+                            <button class="btn btn-small btn-secondary" id="copyResultBtn" title="Copiar resumen de resultados al portapapeles">Copiar Resultado</button>
                             <button class="btn btn-small" id="clearLogBtn">Limpiar</button>
                             <button class="btn btn-small" id="exportLogBtn">Exportar</button>
                         </div>

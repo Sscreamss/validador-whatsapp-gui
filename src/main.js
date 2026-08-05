@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, Notification, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, Notification, shell, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -334,6 +334,14 @@ ipcMain.handle('get-user-data-path', () => {
   return userDataPath;
 });
 
+ipcMain.handle('copy-to-clipboard', (event, text) => {
+  if (text) {
+    clipboard.writeText(text);
+    return { success: true };
+  }
+  return { success: false, error: 'No text provided' };
+});
+
 /**
  * Handler para guardar una nueva configuración
  */
@@ -399,15 +407,15 @@ ipcMain.handle('start-validation', async (event, configPath) => {
 
     // Event listeners del validador
     validadorInstance.on('qr', (qr) => {
-      mainWindow.webContents.send('qr-code', qr);
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('qr-code', qr);
     });
 
     validadorInstance.on('authenticated', () => {
-      mainWindow.webContents.send('authenticated');
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('authenticated');
     });
 
     validadorInstance.on('ready', () => {
-      mainWindow.webContents.send('whatsapp-ready');
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('whatsapp-ready');
     });
 
     validadorInstance.on('progress', (data) => {
@@ -417,14 +425,15 @@ ipcMain.handle('start-validation', async (event, configPath) => {
         app.dock.setBadge(percentage > 0 ? `${percentage}%` : '');
       }
       
-      mainWindow.webContents.send('validation-progress', data);
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('validation-progress', data);
     });
 
     validadorInstance.on('log', (logData) => {
-      mainWindow.webContents.send('validation-log', logData);
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('validation-log', logData);
     });
 
     validadorInstance.on('error', (error) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
       if (error.message === 'CREDENTIALS_NOT_FOUND') {
         mainWindow.webContents.send('validation-error', {
           code: 'CREDENTIALS_NOT_FOUND',
@@ -437,7 +446,7 @@ ipcMain.handle('start-validation', async (event, configPath) => {
     });
 
     validadorInstance.on('completed', (results) => {
-      mainWindow.webContents.send('validation-completed', results);
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('validation-completed', results);
       
       // Limpiar badge del dock
       if (process.platform === 'darwin' && app.dock) {

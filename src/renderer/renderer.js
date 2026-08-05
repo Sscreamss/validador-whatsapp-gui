@@ -78,6 +78,12 @@ const elements = {
   logContainer: document.getElementById('logContainer'),
   clearLogBtn: document.getElementById('clearLogBtn'),
   exportLogBtn: document.getElementById('exportLogBtn'),
+  copyResultBtn: document.getElementById('copyResultBtn'),
+
+  // Results summary
+  resultsSummaryCard: document.getElementById('resultsSummaryCard'),
+  resultsSummaryText: document.getElementById('resultsSummaryText'),
+  copySummaryBtn: document.getElementById('copySummaryBtn'),
   
   // Toast container
   toastContainer: document.getElementById('toastContainer')
@@ -131,6 +137,8 @@ function setupEventListeners() {
   // Controles de log
   elements.clearLogBtn.addEventListener('click', clearLogs);
   elements.exportLogBtn.addEventListener('click', exportLogs);
+  elements.copyResultBtn?.addEventListener('click', copyValidationResults);
+  elements.copySummaryBtn?.addEventListener('click', copyValidationResults);
 }
 
 function setupElectronListeners() {
@@ -190,6 +198,13 @@ function setupElectronListeners() {
     showToast('success', 'Validación completada', 
       `${results.valid} válidos, ${results.invalid} inválidos, ${results.duplicates} duplicados`);
     
+    // Mostrar tarjeta de resumen final
+    if (elements.resultsSummaryCard && elements.resultsSummaryText) {
+      elements.resultsSummaryText.textContent = 
+        `Total: ${results.total || 0} | Válidos: ${results.valid || 0} | Inválidos: ${results.invalid || 0} | Duplicados: ${results.duplicates || 0}`;
+      elements.resultsSummaryCard.classList.remove('hidden');
+    }
+
     // Actualizar botones
     elements.startBtn.classList.remove('hidden');
     elements.pauseBtn.classList.add('hidden');
@@ -438,6 +453,10 @@ function resetProgress() {
     duplicates: 0
   };
   
+  if (elements.resultsSummaryCard) {
+    elements.resultsSummaryCard.classList.add('hidden');
+  }
+
   updateProgress(appState.validationData);
   elements.currentNumber.textContent = '-';
   elements.currentStatus.textContent = 'Esperando...';
@@ -610,6 +629,37 @@ function exportLogs() {
   URL.revokeObjectURL(url);
   
   showToast('success', 'Logs exportados', 'Archivo de logs descargado');
+}
+
+async function copyValidationResults() {
+  const { total, valid, invalid, duplicates } = appState.validationData;
+  const configName = appState.selectedConfig?.nombre || 'Configuración';
+
+  const textToCopy = `${configName}: Total: ${total || 0}, Válidos: ${valid || 0}, Inválidos: ${invalid || 0}, Duplicados: ${duplicates || 0}`;
+
+  try {
+    if (window.electronAPI && window.electronAPI.copyToClipboard) {
+      await window.electronAPI.copyToClipboard(textToCopy);
+    } else {
+      await navigator.clipboard.writeText(textToCopy);
+    }
+    showToast('success', '¡Copiado!', 'Resultado copiado al portapapeles');
+
+    // Feedback visual en los botones de copiar
+    [elements.copyResultBtn, elements.copySummaryBtn].forEach(btn => {
+      if (!btn) return;
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '✓ ¡Copiado!';
+      btn.classList.add('btn-copied');
+      setTimeout(() => {
+        btn.innerHTML = originalText;
+        btn.classList.remove('btn-copied');
+      }, 2000);
+    });
+  } catch (error) {
+    console.error('Error al copiar al portapapeles:', error);
+    showToast('error', 'Error al copiar', 'No se pudo copiar el resultado');
+  }
 }
 
 // Toast notifications
