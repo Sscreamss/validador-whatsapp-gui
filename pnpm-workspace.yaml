@@ -1,3 +1,5 @@
+publicHoistPattern:
+  - '*'
 allowBuilds:
   electron: true
   lzma-native: true
