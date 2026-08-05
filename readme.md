@@ -32,7 +32,7 @@ Aplicación de escritorio desarrollada en Electron para validar números de What
 
 ### **Sistema**
 - **Node.js**: v16.0.0 o superior
-- **npm**: v7.0.0 o superior
+- **pnpm**: v9.0.0 o superior
 - **Sistema Operativo**: Windows 10+, macOS 10.14+, o Ubuntu 18.04+
 - **Memoria RAM**: Mínimo 4GB, recomendado 8GB
 - **Conexión a internet**: Requerida para WhatsApp Web y Google Sheets
@@ -53,7 +53,7 @@ cd validador-whatsapp
 
 ### 2. **Instalar dependencias**
 ```bash
-npm install
+pnpm install
 ```
 
 ### 3. **Configurar Google Sheets API**
@@ -67,18 +67,18 @@ npm install
 
 ### 4. **Ejecutar en modo desarrollo**
 ```bash
-npm run dev
+pnpm dev
 ```
 
 ### 5. **Compilar para producción**
 ```bash
 # Para tu plataforma actual
-npm run build
+pnpm build
 
 # Para plataformas específicas
-npm run build:win    # Windows
-npm run build:mac    # macOS
-npm run build:linux  # Linux
+pnpm build:win    # Windows
+pnpm build:mac    # macOS
+pnpm build:linux  # Linux
 ```
 
 ## 📁 Estructura del Proyecto
@@ -105,20 +105,19 @@ validador-whatsapp/
 
 ```bash
 # Desarrollo
-npm run dev              # Ejecutar en modo desarrollo
-npm run start           # Iniciar aplicación compilada
+pnpm dev              # Ejecutar en modo desarrollo
+pnpm start           # Iniciar aplicación compilada
 
 # Compilación
-npm run build           # Compilar para la plataforma actual
-npm run build:win       # Compilar para Windows
-npm run build:mac       # Compilar para macOS
-npm run build:linux     # Compilar para Linux
-npm run build:all       # Compilar para todas las plataformas
+pnpm build           # Compilar para la plataforma actual
+pnpm build:win       # Compilar para Windows
+pnpm build:mac       # Compilar para macOS
+pnpm build:linux     # Compilar para Linux
+pnpm build:all       # Compilar para todas las plataformas
 
 # Utilidades
-npm run clean           # Limpiar archivos temporales
-npm run lint            # Verificar código con ESLint
-npm run test            # Ejecutar tests (si están configurados)
+pnpm clean           # Limpiar archivos temporales
+pnpm rebuild         # Reconstruir dependencias nativas
 ```
 
 ## ⚙️ Configuración de Desarrollo

@@ -12,13 +12,13 @@
     "release:mac": "electron-builder --mac --publish always",
     "release:win": "electron-builder --win --publish always",
     "release:all": "electron-builder --mac --win --publish always",
-    "build": "npm run build:mac:intel && npm run build:mac:apple",
-    "build:mac": "npm run build:mac:intel && npm run build:mac:apple",
+    "build": "pnpm build:mac:intel && pnpm build:mac:apple",
+    "build:mac": "pnpm build:mac:intel && pnpm build:mac:apple",
     "build:mac:intel": "electron-builder --mac --x64",
     "build:mac:apple": "electron-builder --mac --arm64",
     "build:win": "electron-builder --win",
     "build:linux": "electron-builder --linux",
-    "dist": "npm run build",
+    "dist": "pnpm build",
     "postinstall": "electron-builder install-app-deps",
     "rebuild": "electron-rebuild",
     "clean": "rimraf dist node_modules/.cache"
@@ -141,5 +141,12 @@
     "puppeteer": "^21.0.0",
     "qrcode-terminal": "^0.12.0",
     "whatsapp-web.js": "github:timothydillan/whatsapp-web.js#fix/duplicate-events-and-bindings"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "lzma-native",
+      "puppeteer"
+    ]
   }
 }
