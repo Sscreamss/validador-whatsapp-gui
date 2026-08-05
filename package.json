@@ -1,6 +1,6 @@
 {
   "name": "validador-whatsapp-gui",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "Validador de WhatsApp con interfaz gráfica",
   "main": "src/main.js",
   "author": "Validador WhatsApp",
